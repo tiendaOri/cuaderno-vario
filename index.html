@@ -179,8 +179,17 @@ th{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.0
 /* ---------- utilidades ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const nf=(n,d=0)=>(n==null||!isFinite(n))?'—':Number(n).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});
-const parseN=v=>{if(v==null)return null;const s=String(v).trim().replace(/\s/g,'').replace(',','.');if(s==='')return null;const n=parseFloat(s);return isFinite(n)?n:null;};
+const nf=(n,d=0)=>(n==null||!isFinite(n))?'—':Number(n).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+/* Acepta 1.234,5 · 1234,5 · 1.234 · 1.5 · 1,5. Un punto seguido de 3 cifras (2.200) cuenta como miles. */
+const parseN=v=>{
+  if(v==null)return null;
+  let t=String(v).trim().replace(/[\s\u00a0€]/g,'');
+  if(t==='')return null;
+  const c=t.includes(','),d=t.includes('.');
+  if(c&&d){t=t.lastIndexOf(',')>t.lastIndexOf('.')?t.replace(/\./g,'').replace(',','.'):t.replace(/,/g,'')}
+  else if(c){t=t.split(',').length>2?t.replace(/,/g,''):t.replace(',','.')}
+  else if(d&&/^[1-9]\d{0,2}(\.\d{3})+$/.test(t)){t=t.replace(/\./g,'')}
+  const n=parseFloat(t);return isFinite(n)?n:null;};
 const fmtIn=v=>v==null?'':String(v).replace('.',',');
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
 const byId=(a,id)=>a.find(x=>x.id===id);
@@ -442,7 +451,7 @@ REG.camion={
   plano(){
     if(!hasDims())return '<div class="empty">Escribe largo, ancho y alto para dibujar la caja a escala.</div>';
     const {L,W,H}=S.truck,pend=pendByZona(),cabL=1700,gap=120;
-    const zr=(z,x,y,w,h,label)=>`<rect class="zr${S.zona===z?' sel':''}" data-act="zona" data-z="${z}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}"/>`+(label?`<text class="zl" x="${(x+w/2).toFixed(1)}" y="${(y+h/2+4).toFixed(1)}" text-anchor="middle">${label}</text>`:'')+(pend[z]?`<circle class="zd" cx="${label?(x+12).toFixed(1):(x+w/2).toFixed(1)}" cy="${label?(y+12).toFixed(1):(y+h/2).toFixed(1)}" r="5"/>`:'');
+    const zr=(z,x,y,w,h,label)=>`<rect class="zr${S.zona===z?' sel':''}" data-act="zona" data-z="${z}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(0,w).toFixed(1)}" height="${Math.max(0,h).toFixed(1)}"/>`+(label?`<text class="zl" x="${(x+w/2).toFixed(1)}" y="${(y+h/2+4).toFixed(1)}" text-anchor="middle">${label}</text>`:'')+(pend[z]?`<circle class="zd" cx="${label?(x+12).toFixed(1):(x+w/2).toFixed(1)}" cy="${label?(y+12).toFixed(1):(y+h/2).toFixed(1)}" r="5"/>`:'');
     const sA=Math.min(336/(cabL+gap+L),150/(H+620)),bx=12+(cabL+gap)*sA,by=10,bw=L*sA,bh=H*sA,tz=10;
     const fl=by+bh,cb=fl+110*sA,ct=cb-(H*0.9+110)*sA,cx=12,cw=cabL*sA,vhA=by+(H+620)*sA+4;
     const wheel=x=>`<circle cx="${x.toFixed(1)}" cy="${(fl+190*sA).toFixed(1)}" r="${(400*sA).toFixed(1)}" fill="var(--ink2)" opacity=".75"/>`;
