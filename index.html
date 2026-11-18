@@ -1,7 +1,6 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style></head><body>
 <title>Cuaderno de obra Vario</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
 <style>
 /* Layout: cuaderno de taller en una columna pensada para el móvil. Cabecera fija arriba, secciones en tarjetas, barra inferior con cinco áreas. */
@@ -825,15 +824,24 @@ const blobToDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload
 function dataURLToBlob(u){const [h,b]=u.split(',');const m=/data:([^;]*)/.exec(h);const bin=atob(b),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:m?m[1]:''});}
 function photoIds(){const ids=[];S.insp.forEach(i=>ids.push(...(i.fotos||[])));S.diario.forEach(d=>ids.push(...(d.fotos||[])));S.docs.forEach(d=>{if(d.fileId)ids.push(d.fileId);});return ids;}
 async function exportBackup(){
-  const dl=await claude_use('downloads');
   const fotos={};for(const id of photoIds()){const r=await Photos.get(id);if(r&&r.blob)fotos[id]={name:r.name,type:r.type,data:await blobToDataURL(r.blob)};}
   const data=JSON.stringify({app:'cuaderno-vario',v:1,fecha:new Date().toISOString(),state:S,fotos});
   const filename='cuaderno-vario-'+today()+'.json';
   try{
-    if(dl)await dl.save({filename,data});
-    else{const u=URL.createObjectURL(new Blob([data],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);}
+    const r=await saveBlob(filename,new Blob([data],{type:'application/json'}));
+    if(r==='cancelado')return false;
     S.lastBackup=Date.now();save();renderHeader();toast('Copia guardada');}
-  catch(e){if(e&&e.code==='declined')return false;toast('No se pudo guardar la copia'+(e&&e.code?' ('+e.code+')':''));return false;}
+  catch(e){toast('No se pudo guardar la copia');return false;}
+}
+/* en el móvil abre el menú de compartir (guardar en Archivos, WhatsApp, correo); en ordenador descarga el archivo */
+async function saveBlob(name,blob){
+  try{
+    const file=new File([blob],name,{type:blob.type||'application/octet-stream'});
+    if(/Android|iPhone|iPad/i.test(navigator.userAgent)&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return 'compartido';}
+  }catch(e){if(e&&e.name==='AbortError')return 'cancelado';}
+  const u=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);
+  return 'descargado';
 }
 async function importBackup(file){
   try{const o=JSON.parse(await file.text());if(o.app!=='cuaderno-vario'||!o.state)throw new Error('No es una copia de este cuaderno');
@@ -841,7 +849,6 @@ async function importBackup(file){
     S=mergeDef(o.state,blank());S.ejemplo=false;TAB=S.tab||'camion';save();renderAll();toast('Copia restaurada');return true;
   }catch(e){toast('No se pudo leer la copia: '+(e.message||e));return false;}
 }
-function claude_use(n){try{return window.claude&&window.claude.use?window.claude.use(n):Promise.resolve(null);}catch(e){return Promise.resolve(null);}}
 function menu(){
   const last=S.lastBackup?'Última copia: '+new Date(S.lastBackup).toLocaleDateString('es-ES',{day:'numeric',month:'long'}):'Todavía no has hecho ninguna copia.';
   openSheet({title:'Copia y datos',body:`<p>Todo se guarda en este navegador, en este dispositivo. Si borras los datos del navegador o cambias de móvil, se pierde. Haz una copia de vez en cuando.</p><p class="hint">${last}</p>
@@ -899,9 +906,7 @@ const ACT={
   'diario-add'(){diario();},'diario-edit'(el){diario(el.dataset.id);},
   'doc-add'(){doc();},'doc-edit'(el){doc(el.dataset.id);},'doc-cat'(el){S.docCat=el.dataset.c;save();refresh('sub');},
   async 'doc-open'(el){const d=byId(S.docs,el.dataset.id),r=await Photos.get(d.fileId);if(!r){toast('No encuentro el archivo');return;}
-    const dl=await claude_use('downloads');
-    if(dl){try{await dl.save({filename:d.nombre||'archivo',data:r.blob});}catch(e){if(!e||e.code!=='declined')toast('No se pudo guardar'+(e&&e.code==='rejected_extension'?': tipo de archivo no admitido':''));}}
-    else{const u=await Photos.url(d.fileId);window.open(u,'_blank');}},
+    try{await saveBlob(d.nombre||'archivo',r.blob);}catch(e){toast('No se pudo guardar el archivo');}},
   'gasto-add'(){gasto();},'gasto-edit'(el){gasto(el.dataset.id);},
   'gasto-toggle'(el){const g=byId(S.gastos,el.dataset.id);g.estado=g.estado==='comprado'?'pendiente':'comprado';commit();}
 };
